@@ -6,4 +6,7 @@ projects:
   TradeNPC:
     path: ""
     lint: false
+    libs:
+    - src: Muqsit/InvMenu/InvMenu
+      version: ^4.3.4
 ...
