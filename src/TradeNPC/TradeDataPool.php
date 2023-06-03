@@ -1,10 +1,10 @@
 <?php
+
 declare(strict_types=1);
 
 namespace TradeNPC;
 
-class TradeDataPool
-{
+class TradeDataPool {
 
 	/** @var TradeNPC[] */
 	public static $interactNPCData = [];
