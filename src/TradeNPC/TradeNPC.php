@@ -15,13 +15,12 @@ use pocketmine\entity\EntitySizeInfo;
 
 class TradeNPC extends Human implements Ageable {
 
-	/** @var CompoundTag|null */
-	protected $shop = null;
+	protected ?CompoundTag $shop = null;
 
 	private $baby = false;
 
 	protected function getInitialSizeInfo(): EntitySizeInfo {
-		return new EntitySizeInfo(1.8, 0.6); //TODO: eye height??
+		return new EntitySizeInfo(1.8, 0.6); // TODO: eye height??
 	}
 
 	public function getName(): string {

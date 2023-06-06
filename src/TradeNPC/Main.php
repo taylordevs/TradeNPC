@@ -21,14 +21,18 @@ use muqsit\invmenu\InvMenuHandler;
 use pocketmine\command\CommandSender;
 use pocketmine\command\Command;
 use pocketmine\event\server\DataPacketReceiveEvent;
-use pocketmine\network\mcpe\protocol\types\NetworkInventoryAction;
 use pocketmine\nbt\tag\ByteArrayTag;
 use pocketmine\nbt\tag\CompoundTag;
 use pocketmine\nbt\tag\ListTag;
 use pocketmine\nbt\tag\StringTag;
-use pocketmine\event\player\PlayerQuitEvent, PlayerChatEvent;
+use pocketmine\event\player\PlayerQuitEvent;
+use pocketmine\event\player\PlayerChatEvent;
 use muqsit\invmenu\transaction\InvMenuTransaction as Transaction;
 use muqsit\invmenu\transaction\InvMenuTransactionResult as TransactionResult;
+use pocketmine\block\BlockTypeIds;
+use pocketmine\block\utils\DyeColor;
+use pocketmine\block\VanillaBlocks;
+use pocketmine\item\VanillaItems;
 use pocketmine\network\mcpe\protocol\ActorEventPacket;
 use pocketmine\network\mcpe\protocol\ContainerClosePacket;
 use pocketmine\network\mcpe\protocol\InventoryTransactionPacket;
@@ -38,6 +42,7 @@ use pocketmine\network\mcpe\protocol\types\inventory\UseItemOnEntityTransactionD
 use pocketmine\network\mcpe\protocol\types\inventory\NormalTransactionData;
 use pocketmine\network\mcpe\JwtUtils;
 use pocketmine\nbt\NBT;
+use pocketmine\network\mcpe\protocol\types\inventory\NetworkInventoryAction;
 
 class Main extends PluginBase implements Listener {
 
@@ -70,6 +75,8 @@ class Main extends PluginBase implements Listener {
 
 	public $itemList = [];
 
+	public InvMenu $menu;
+
 	public function onLoad(): void {
 		self::$instance = $this;
 	}
@@ -78,8 +85,8 @@ class Main extends PluginBase implements Listener {
 		return self::$instance;
 	}
 
-	public function onEnable(): void {
-		$this->saveResource("config.yml");
+	protected function onEnable(): void {
+		$this->saveDefaultConfig();
 		/*EntityFactory::getInstance()->register(TradeNPC::class, static function(World $world, CompoundTag $nbt): TradeNPC{
             return new TradeNPC(EntityDataHelper::parseLocation($nbt, $world), $nbt);
         }, ['tradenpc']);*/
@@ -94,7 +101,7 @@ class Main extends PluginBase implements Listener {
 		$this->menu = InvMenu::create(InvMenu::TYPE_CHEST);
 	}
 
-	public function onChat(PlayerChatEvent $ev) {
+	public function onChat(PlayerChatEvent $ev): void {
 		$p = $ev->getPlayer();
 		$chat = $ev->getMessage();
 		if ($this->turn and $this->name == $p->getName()) {
@@ -146,12 +153,11 @@ class Main extends PluginBase implements Listener {
 	public function setItemss($p) {
 		$this->menu->setName("§eTradeNPC");
 		$this->menu->setListener(function (Transaction $transaction): TransactionResult {
-			$inv = $this->menu->getInventory();
 			$player = $transaction->getPlayer();
-			if ($transaction->getItemClicked()->getId() == 160) {
+			if ($transaction->getItemClicked()->getTypeId() === BlockTypeIds::STAINED_GLASS_PANE) {
 				foreach (self::CHEST as $slot) {
 					$item = $this->menu->getInventory()->getItem($slot);
-					if ($item->getId() == 160) {
+					if ($item->getTypeId() === BlockTypeIds::STAINED_GLASS_PANE) {
 						continue;
 					}
 					$this->fullItem[] = $item;
@@ -164,9 +170,9 @@ class Main extends PluginBase implements Listener {
 			}
 			return $transaction->continue();
 		});
-		$xacnhan = ItemFactory::getInstance()->get(160, 7, 1);
+		$xacnhan = VanillaBlocks::STAINED_GLASS()->setColor(DyeColor::GRAY())->asItem();
 		$xacnhan->setCustomName("Confirm\nAfter choose, input name of npc to chat");
-		$thoat = ItemFactory::getInstance()->get(331, 0, 1);
+		$thoat = VanillaItems::REDSTONE_DUST();
 		$thoat->setCustomName("Exit");
 		$inv = $this->menu->getInventory();
 		$inv->setItem(26, $xacnhan);
