@@ -86,7 +86,6 @@ class Main extends PluginBase implements Listener {
 	}
 
 	protected function onEnable(): void {
-		$this->saveDefaultConfig();
 		/*EntityFactory::getInstance()->register(TradeNPC::class, static function(World $world, CompoundTag $nbt): TradeNPC{
             return new TradeNPC(EntityDataHelper::parseLocation($nbt, $world), $nbt);
         }, ['tradenpc']);*/
@@ -154,10 +153,10 @@ class Main extends PluginBase implements Listener {
 		$this->menu->setName("§eTradeNPC");
 		$this->menu->setListener(function (Transaction $transaction): TransactionResult {
 			$player = $transaction->getPlayer();
-			if ($transaction->getItemClicked()->getTypeId() === BlockTypeIds::STAINED_GLASS_PANE) {
+			if ($transaction->getItemClicked()->getTypeId() === VanillaBlocks::STAINED_GLASS_PANE()->asItem()->getTypeId()) {
 				foreach (self::CHEST as $slot) {
 					$item = $this->menu->getInventory()->getItem($slot);
-					if ($item->getTypeId() === BlockTypeIds::STAINED_GLASS_PANE) {
+					if ($item->getTypeId() === VanillaBlocks::STAINED_GLASS_PANE()->asItem()->getTypeId()) {
 						continue;
 					}
 					$this->fullItem[] = $item;
@@ -170,7 +169,7 @@ class Main extends PluginBase implements Listener {
 			}
 			return $transaction->continue();
 		});
-		$xacnhan = VanillaBlocks::STAINED_GLASS()->setColor(DyeColor::GRAY())->asItem();
+		$xacnhan = VanillaBlocks::STAINED_GLASS_PANE()->setColor(DyeColor::GRAY())->asItem();
 		$xacnhan->setCustomName("Confirm\nAfter choose, input name of npc to chat");
 		$thoat = VanillaItems::REDSTONE_DUST();
 		$thoat->setCustomName("Exit");

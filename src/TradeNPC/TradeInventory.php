@@ -12,13 +12,15 @@ use pocketmine\network\mcpe\protocol\UpdateTradePacket;
 use pocketmine\player\Player;
 use pocketmine\item\Item;
 use pocketmine\inventory\SimpleInventory;
+use pocketmine\item\VanillaItems;
 use pocketmine\world\Position;
 use pocketmine\network\mcpe\protocol\types\CacheableNbt;
 use pocketmine\nbt\tag\CompoundTag;
 
 class TradeInventory extends SimpleInventory implements BlockInventory {
 
-	protected $npc;
+	protected TradeNPC $npc;
+	protected Position $holder;
 
 	public function internalSetContents(array $items): void {
 	}
@@ -31,12 +33,14 @@ class TradeInventory extends SimpleInventory implements BlockInventory {
 	}
 
 	public function getItem(int $index): Item {
+		return VanillaItems::AIR();
 	}
 
 	public function getContents(bool $includeEmpty = false): array {
+		return [];
 	}
 
-	public function writeTag(NamedTag $tag): void {
+	public function writeTag($tag): void {
 		$this->putByte($tag->getType());
 		$this->putString($tag->getName());
 		$tag->write($this);

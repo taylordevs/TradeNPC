@@ -15,7 +15,8 @@ use pocketmine\entity\EntitySizeInfo;
 
 class TradeNPC extends Human implements Ageable {
 
-	protected ?CompoundTag $shop = null;
+	/** @var CompoundTag|null */
+	protected $shop = null;
 
 	private $baby = false;
 
