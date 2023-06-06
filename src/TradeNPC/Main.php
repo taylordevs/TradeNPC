@@ -31,24 +31,22 @@ use muqsit\invmenu\transaction\InvMenuTransactionResult as TransactionResult;
 use pocketmine\block\utils\DyeColor;
 use pocketmine\block\VanillaBlocks;
 use pocketmine\item\VanillaItems;
-use pocketmine\network\mcpe\protocol\ActorEventPacket;
 use pocketmine\network\mcpe\protocol\ContainerClosePacket;
 use pocketmine\network\mcpe\protocol\InventoryTransactionPacket;
 use pocketmine\network\mcpe\protocol\LoginPacket;
-use pocketmine\network\mcpe\protocol\types\ActorEvent;
 use pocketmine\network\mcpe\protocol\types\inventory\UseItemOnEntityTransactionData;
 use pocketmine\network\mcpe\protocol\types\inventory\NormalTransactionData;
 use pocketmine\network\mcpe\JwtUtils;
 use pocketmine\nbt\NBT;
+use pocketmine\network\mcpe\protocol\ActorEventPacket;
+use pocketmine\network\mcpe\protocol\types\ActorEvent;
 use pocketmine\network\mcpe\protocol\types\inventory\NetworkInventoryAction;
 
 class Main extends PluginBase implements Listener {
 
 	public $currentWindow = null;
 
-	public const CHEST = [
-		0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26
-	];
+	public const CHEST = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26];
 
 	public const ITEM_FORMAT = [
 		"id" => 1,
@@ -62,7 +60,9 @@ class Main extends PluginBase implements Listener {
 	protected $deviceOSData = [];
 
 	public $fullItem = [];
+
 	public $name = null;
+
 	public $start = false;
 
 	public $turn = false;
@@ -75,7 +75,7 @@ class Main extends PluginBase implements Listener {
 
 	public InvMenu $menu;
 
-	public function onLoad(): void {
+	protected function onLoad(): void {
 		self::$instance = $this;
 	}
 
@@ -84,13 +84,9 @@ class Main extends PluginBase implements Listener {
 	}
 
 	protected function onEnable(): void {
-		/*EntityFactory::getInstance()->register(TradeNPC::class, static function(World $world, CompoundTag $nbt): TradeNPC{
-            return new TradeNPC(EntityDataHelper::parseLocation($nbt, $world), $nbt);
-        }, ['tradenpc']);*/
 		EntityFactory::getInstance()->register(TradeNPC::class, function (World $world, CompoundTag $nbt): TradeNPC {
 			return new TradeNPC(EntityDataHelper::parseLocation($nbt, $world), Human::parseSkinNBT($nbt), $nbt);
 		}, ['TradeNPC', 'Trade']);
-		//Entity::registerEntity(TradeNPC::class, true, ["tradenpc"]);
 		$this->getServer()->getPluginManager()->registerEvents($this, $this);
 		if (!InvMenuHandler::isRegistered()) {
 			InvMenuHandler::register($this);
@@ -98,10 +94,10 @@ class Main extends PluginBase implements Listener {
 		$this->menu = InvMenu::create(InvMenu::TYPE_CHEST);
 	}
 
-	public function onChat(PlayerChatEvent $ev): void {
-		$p = $ev->getPlayer();
-		$chat = $ev->getMessage();
-		if ($this->turn and $this->name == $p->getName()) {
+	public function onChat(PlayerChatEvent $event): void {
+		$player = $event->getPlayer();
+		$chat = $event->getMessage();
+		if ($this->turn and $this->name == $player->getName()) {
 			$entity = $this->getEntityName($chat);
 			if ($entity === null) {
 				return;
@@ -111,25 +107,25 @@ class Main extends PluginBase implements Listener {
 				$item2 = $this->fullItem[$i + 9];
 				$item3 = $this->fullItem[$i + 18];
 				if ($item1->isNull() or $item2->isNull() or $item3->isNull()) {
-					unset(TradeDataPool::$editNPCData[$p->getName()]);
+					unset(TradeDataPool::$editNPCData[$player->getName()]);
 					break;
 				}
-				TradeDataPool::$editNPCData[$p->getName()]["buyA"] = $item1;
-				TradeDataPool::$editNPCData[$p->getName()]["buyB"] = $item2;
-				TradeDataPool::$editNPCData[$p->getName()]["sell"] = $item3;
-				$buya = TradeDataPool::$editNPCData[$p->getName()]["buyA"];
-				$buyb = TradeDataPool::$editNPCData[$p->getName()]["buyB"];
-				$sell = TradeDataPool::$editNPCData[$p->getName()]["sell"];
+				TradeDataPool::$editNPCData[$player->getName()]["buyA"] = $item1;
+				TradeDataPool::$editNPCData[$player->getName()]["buyB"] = $item2;
+				TradeDataPool::$editNPCData[$player->getName()]["sell"] = $item3;
+				$buya = TradeDataPool::$editNPCData[$player->getName()]["buyA"];
+				$buyb = TradeDataPool::$editNPCData[$player->getName()]["buyB"];
+				$sell = TradeDataPool::$editNPCData[$player->getName()]["sell"];
 				$entity->addTradeItem($buya, $buyb, $sell);
-				unset(TradeDataPool::$editNPCData[$p->getName()]);
-				$p->sendMessage("Added item to trade!");
+				unset(TradeDataPool::$editNPCData[$player->getName()]);
+				$player->sendMessage("Added item to trade!");
 				$this->saveall();
 			}
 			$this->fullItem = [];
 			$this->turn = false;
 			$this->name = null;
-			unset(TradeDataPool::$editNPCData[$p->getName()]);
-			$ev->cancel();
+			unset(TradeDataPool::$editNPCData[$player->getName()]);
+			$event->cancel();
 		}
 	}
 
