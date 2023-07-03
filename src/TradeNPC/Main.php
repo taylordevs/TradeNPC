@@ -4,129 +4,76 @@ declare(strict_types=1);
 
 namespace TradeNPC;
 
-use pocketmine\player\Player;
-use pocketmine\entity\EntityFactory;
-use pocketmine\entity\EntityDataHelper;
-use pocketmine\event\Listener;
-use pocketmine\plugin\PluginBase;
-use pocketmine\world\World;
-use pocketmine\entity\Location;
-use pocketmine\entity\Human;
-use pocketmine\item\Item;
-use pocketmine\nbt\LittleEndianNbtSerializer;
-use pocketmine\event\inventory\InventoryOpenEvent;
 use muqsit\invmenu\InvMenu;
 use muqsit\invmenu\InvMenuHandler;
-use pocketmine\command\CommandSender;
-use pocketmine\command\Command;
-use pocketmine\event\server\DataPacketReceiveEvent;
-use pocketmine\nbt\tag\ByteArrayTag;
-use pocketmine\nbt\tag\CompoundTag;
-use pocketmine\nbt\tag\ListTag;
-use pocketmine\nbt\tag\StringTag;
-use pocketmine\event\player\PlayerQuitEvent;
-use pocketmine\event\player\PlayerChatEvent;
 use muqsit\invmenu\transaction\InvMenuTransaction as Transaction;
 use muqsit\invmenu\transaction\InvMenuTransactionResult as TransactionResult;
+use muqsit\simplepackethandler\SimplePacketHandler;
 use pocketmine\block\utils\DyeColor;
 use pocketmine\block\VanillaBlocks;
+use pocketmine\command\Command;
+use pocketmine\command\CommandSender;
+use pocketmine\entity\EntityDataHelper;
+use pocketmine\entity\EntityFactory;
+use pocketmine\entity\Human;
+use pocketmine\entity\Location;
+use pocketmine\event\inventory\InventoryOpenEvent;
+use pocketmine\event\Listener;
 use pocketmine\item\VanillaItems;
+use pocketmine\nbt\tag\ByteArrayTag;
+use pocketmine\nbt\tag\CompoundTag;
+use pocketmine\nbt\tag\StringTag;
+use pocketmine\network\mcpe\NetworkSession;
 use pocketmine\network\mcpe\protocol\ContainerClosePacket;
-use pocketmine\network\mcpe\protocol\InventoryTransactionPacket;
-use pocketmine\network\mcpe\protocol\LoginPacket;
-use pocketmine\network\mcpe\protocol\types\inventory\UseItemOnEntityTransactionData;
-use pocketmine\network\mcpe\protocol\types\inventory\NormalTransactionData;
-use pocketmine\network\mcpe\JwtUtils;
-use pocketmine\nbt\NBT;
-use pocketmine\network\mcpe\protocol\ActorEventPacket;
-use pocketmine\network\mcpe\protocol\types\ActorEvent;
-use pocketmine\network\mcpe\protocol\types\inventory\NetworkInventoryAction;
+use pocketmine\player\Player;
+use pocketmine\plugin\PluginBase;
+use pocketmine\utils\SingletonTrait;
+use pocketmine\world\World;
+use TradeNPC\entity\TradeNPC;
+use TradeNPC\inventory\TradeInventory;
+use TradeNPC\listener\EventListener;
 
 class Main extends PluginBase implements Listener {
 
+    use SingletonTrait;
+
 	public $currentWindow = null;
-
-	public const CHEST = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26];
-
-	public const ITEM_FORMAT = [
-		"id" => 1,
-		"damage" => 0,
-		"count" => 1,
-		"display_name" => "",
-		"lore" => [],
-		"enchants" => [],
-	];
-
-	protected $deviceOSData = [];
 
 	public $fullItem = [];
 
-	public $name = null;
-
-	public $start = false;
-
-	public $turn = false;
-
-	public $enti = null;
-
-	private static $instance = null;
-
-	public $itemList = [];
-
 	public InvMenu $menu;
 
-	protected function onLoad(): void {
-		self::$instance = $this;
-	}
+    public $name = null;
 
-	public static function getInstance(): Main {
-		return self::$instance;
+    public $start = false;
+
+    public $turn = false;
+
+	protected function onLoad(): void {
+        self::setInstance($this);
 	}
 
 	protected function onEnable(): void {
+        if (!InvMenuHandler::isRegistered()) {
+            InvMenuHandler::register($this);
+        }
 		EntityFactory::getInstance()->register(TradeNPC::class, function (World $world, CompoundTag $nbt): TradeNPC {
 			return new TradeNPC(EntityDataHelper::parseLocation($nbt, $world), Human::parseSkinNBT($nbt), $nbt);
 		}, ['TradeNPC', 'Trade']);
-		$this->getServer()->getPluginManager()->registerEvents($this, $this);
-		if (!InvMenuHandler::isRegistered()) {
-			InvMenuHandler::register($this);
-		}
+		$this->getServer()->getPluginManager()->registerEvents(new EventListener($this), $this);
+        SimplePacketHandler::createInterceptor($this)
+            ->interceptIncoming(static function (ContainerClosePacket $packet, NetworkSession $networkSession): bool {
+                $player = $networkSession->getPlayer();
+                if (isset(TradeDataPool::$windowIdData[$player->getName()])) {
+                    $pk = ContainerClosePacket::create(
+                        windowId: 255,
+                        server: false
+                    );
+                    $networkSession->sendDataPacket($pk);
+                }
+                return true;
+            });
 		$this->menu = InvMenu::create(InvMenu::TYPE_CHEST);
-	}
-
-	public function onChat(PlayerChatEvent $event): void {
-		$player = $event->getPlayer();
-		$chat = $event->getMessage();
-		if ($this->turn and $this->name == $player->getName()) {
-			$entity = $this->getEntityName($chat);
-			if ($entity === null) {
-				return;
-			}
-			for ($i = 0; $i <= $this->fullItem; $i++) {
-				$item1 = $this->fullItem[$i];
-				$item2 = $this->fullItem[$i + 9];
-				$item3 = $this->fullItem[$i + 18];
-				if ($item1->isNull() or $item2->isNull() or $item3->isNull()) {
-					unset(TradeDataPool::$editNPCData[$player->getName()]);
-					break;
-				}
-				TradeDataPool::$editNPCData[$player->getName()]["buyA"] = $item1;
-				TradeDataPool::$editNPCData[$player->getName()]["buyB"] = $item2;
-				TradeDataPool::$editNPCData[$player->getName()]["sell"] = $item3;
-				$buya = TradeDataPool::$editNPCData[$player->getName()]["buyA"];
-				$buyb = TradeDataPool::$editNPCData[$player->getName()]["buyB"];
-				$sell = TradeDataPool::$editNPCData[$player->getName()]["sell"];
-				$entity->addTradeItem($buya, $buyb, $sell);
-				unset(TradeDataPool::$editNPCData[$player->getName()]);
-				$player->sendMessage("Added item to trade!");
-				$this->saveall();
-			}
-			$this->fullItem = [];
-			$this->turn = false;
-			$this->name = null;
-			unset(TradeDataPool::$editNPCData[$player->getName()]);
-			$event->cancel();
-		}
 	}
 
 	public function getEntityName(string $chat) {
@@ -136,68 +83,52 @@ class Main extends PluginBase implements Listener {
 					if ($entity->getNameTag() === $chat) {
 						$this->turn = false;
 						return $entity;
-						break;
 					}
 				}
 			}
 		}
 	}
 
-	public function setItemss($p) {
+	public function setItems($p) {
 		$this->menu->setName("§eTradeNPC");
 		$this->menu->setListener(function (Transaction $transaction): TransactionResult {
 			$player = $transaction->getPlayer();
 			if ($transaction->getItemClicked()->getTypeId() === VanillaBlocks::STAINED_GLASS_PANE()->asItem()->getTypeId()) {
-				foreach (self::CHEST as $slot) {
+				foreach (range(0, 26) as $slot) {
 					$item = $this->menu->getInventory()->getItem($slot);
-					if ($item->getTypeId() === VanillaBlocks::STAINED_GLASS_PANE()->asItem()->getTypeId()) {
+					if ($item->getBlock()->isSameState(VanillaBlocks::STAINED_GLASS_PANE())) {
 						continue;
 					}
 					$this->fullItem[] = $item;
 				}
 				$this->turn = true;
 				$this->name = $player->getName();
+                $player->removeCurrentWindow();
 				$player->sendMessage("Input name npc to chat");
-				# $player->removeCurrentWindow($this->menu->getInventory());
 				return $transaction->discard();
 			}
 			return $transaction->continue();
 		});
-		$xacnhan = VanillaBlocks::STAINED_GLASS_PANE()->setColor(DyeColor::GRAY())->asItem();
-		$xacnhan->setCustomName("Confirm\nAfter choose, input name of npc to chat");
-		$thoat = VanillaItems::REDSTONE_DUST();
-		$thoat->setCustomName("Exit");
+		$confirm = VanillaBlocks::STAINED_GLASS_PANE()->setColor(DyeColor::GRAY())->asItem();
+        $confirm->setCustomName("Confirm\nAfter choose, input name of npc to chat");
+		$exit = VanillaItems::REDSTONE_DUST();
+        $exit->setCustomName("Exit");
 		$inv = $this->menu->getInventory();
-		$inv->setItem(26, $xacnhan);
+		$inv->setItem(26, $confirm);
 		$this->menu->send($p);
 	}
 
-	public function loadData(TradeNPC $npc) {
-		if (file_exists($this->getDataFolder() . $npc->getNameTag() . ".dat")) {
-			$nbt = (new LittleEndianNbtSerializer)->read(file_get_contents($this->getDataFolder() . $npc->getNameTag() . ".dat"));
-		} else {
-			$nbt = CompoundTag::create()
-				->setTag(
-					"Recipes",
-					new ListTag([]),
-					NBT::TAG_Compound
-				);
-		}
-		$npc->loadData($nbt);
-	}
-
-	public function saveall() {
+	public function saveAll() {
 		foreach ($this->getServer()->getOnlinePlayers() as $player) {
 			$player->save();
 		}
-
 		foreach ($this->getServer()->getWorldManager()->getWorlds() as $world) {
 			$world->save(true);
 		}
 	}
 
-	public function distance($posx, $posz, $x, $z): float {
-		return sqrt($this->distanceSquared($posx, $posz, $x, $z));
+	public function distance($posX, $posZz, $X, $Z): float {
+		return sqrt($this->distanceSquared($posX, $posZz, $X, $Z));
 	}
 
 	public function distanceSquared($posx, $posz, $x, $z): float {
@@ -226,15 +157,22 @@ class Main extends PluginBase implements Listener {
 					$nbt->setTag("CapeData", new ByteArrayTag($sender->getSkin()->getCapeData()));
 					$nbt->setTag("GeometryName", new StringTag($sender->getSkin()->getGeometryName()));
 					$nbt->setTag("GeometryData", new ByteArrayTag($sender->getSkin()->getGeometryData()));
-					/** @var TradeNPC $entity */
-					//$entity = Entity::createEntity("tradenpc", $sender->getWorld(), $nbt);
-					$entity = new TradeNPC(Location::fromObject($sender->getPosition()->add(0.5, 0, 0.5), $sender->getPosition()->getWorld(), $sender->getLocation()->getYaw() ?? 0, $sender->getLocation()->getPitch() ?? 0), $sender->getSkin(), $nbt);
+					$entity = new TradeNPC(
+                        Location::fromObject(
+                            $sender->getPosition()->add(0.5, 0, 0.5),
+                            $sender->getPosition()->getWorld(),
+                                $sender->getLocation()->getYaw() ?? 0,
+                                $sender->getLocation()->getPitch() ?? 0
+                        ),
+                        $sender->getSkin(),
+                        $nbt
+                    );
 					$entity->setNameTag($name);
-					$entity->setNameTagAlwaysVisible(true);
+					$entity->setNameTagAlwaysVisible();
 					$entity->spawnToAll();
 					break;
 				case "setitem":
-					$this->setItemss($sender);
+					$this->setItems($sender);
 					break;
 				case "remove":
 					array_shift($args);
@@ -274,74 +212,7 @@ class Main extends PluginBase implements Listener {
 		return true;
 	}
 
-	/**
-	 * @param DataPacketReceiveEvent $event
-	 *
-	 * @author
-	 */
-	public function handleDataPacket(DataPacketReceiveEvent $event) {
-		$player = $event->getOrigin()->getPlayer();
-		$packet = $event->getPacket();
-		if ($packet instanceof ActorEventPacket) {
-			if ($packet->eventId === ActorEvent::COMPLETE_TRADE) {
-				if (!isset(TradeDataPool::$interactNPCData[$player->getName()])) {
-					return;
-				}
-				$data = TradeDataPool::$interactNPCData[$player->getName()]->getShopCompoundTag()->getListTag("Recipes")->get($packet->eventData);
-				if ($data instanceof CompoundTag) {
-					$buya = Item::nbtDeserialize($data->getCompoundTag("buyA"));
-					$buyb = Item::nbtDeserialize($data->getCompoundTag("buyB"));
-					$sell = Item::nbtDeserialize($data->getCompoundTag("sell"));
-					if ($player->getInventory()->contains($buya) and $player->getInventory()->contains($buyb)) { // Prevents https://github.com/alvin0319/TradeNPC/issues/3
-						$player->getInventory()->removeItem($buya);
-						$player->getInventory()->removeItem($buyb);
-						$player->getInventory()->addItem($sell);
-						$volume = mt_rand();
-					} else {
-						$volume = mt_rand();
-					}
-				}
-				// unset(TradeDataPool::$interactNPCData[$player->getName()]);
-			}
-		}
-		if ($packet instanceof InventoryTransactionPacket) {
-			//7: PC
-			if ($packet->trData instanceof NormalTransactionData) {
-				foreach ($packet->trData->getActions() as $action) {
-					if ($action instanceof NetworkInventoryAction) {
-						if (isset(TradeDataPool::$windowIdData[$player->getName()]) and $action->windowId === TradeDataPool::$windowIdData[$player->getName()]) {
-							$player->getInventory()->addItem($action->oldItem);
-							$player->getInventory()->removeItem($action->newItem);
-						}
-					}
-				}
-			} elseif ($packet->trData instanceof UseItemOnEntityTransactionData) {
-				$entity = $player->getWorld()->getEntity($packet->trData->getActorRuntimeId());
-				if ($entity instanceof TradeNPC) {
-					$this->setCWindow($entity->getTradeInventory(), $player);
-				}
-			}
-		}
-		if ($packet instanceof LoginPacket) {
-			$data = JwtUtils::parse($packet->clientDataJwt);
-			$device = (int)$data[1]["DeviceOS"];
-			//$device = (int)$packet->clientData["DeviceOS"];
-			//foreach($data as $datas) {
-			//var_dump($data);
-			//}
-			$this->deviceOSData[strtolower($data[1]["ThirdPartyName"])] = $device;
-		}
-		if ($packet instanceof ContainerClosePacket) {
-			if (isset(TradeDataPool::$windowIdData[$player->getName()])) {
-				$pk = new ContainerClosePacket();
-				$pk->windowId = 255; // ??
-				$player->getNetworkSession()->sendDataPacket($pk);
-			}
-		}
-	}
-
 	public function setCWindow(TradeInventory $inventory, $player): bool {
-		//$player->currentWindow = $inventory;
 		if ($inventory === $this->currentWindow) {
 			return true;
 		}
@@ -350,40 +221,13 @@ class Main extends PluginBase implements Listener {
 		if ($ev->isCancelled()) {
 			return false;
 		}
-
-		//TODO: client side race condition here makes the opening work incorrectly
 		$player->removeCurrentWindow();
 
-		if (($inventoryManager = $player->getNetworkSession()->getInvManager()) === null) {
+		if ($player->getNetworkSession()->getInvManager() === null) {
 			throw new \InvalidArgumentException("Player cannot open inventories in this state");
 		}
-		//$player->logger->debug("Opening inventory " . get_class($inventory) . "#" . spl_object_id($inventory));
-		//$inventoryManager->onCurrentWindowChange($inventory);
 		$inventory->onOpen($player);
 		$this->currentWindow = $inventory;
 		return true;
-	}
-
-	public function onQuit(PlayerQuitEvent $event) {
-		$player = $event->getPlayer();
-		if (isset($this->deviceOSData[strtolower($player->getName())])) unset($this->deviceOSData[strtolower($player->getName())]);
-	}
-
-	public function saveData(TradeNPC $npc) {
-		if (!file_exists($this->getDataFolder() . $npc->getNameTag() . ".dat")) {
-			fopen($this->getDataFolder() . $npc->getNameTag() . ".dat", "w");
-		}
-		file_put_contents($this->getDataFolder() . $npc->getNameTag() . ".dat", $npc->getSaveNBT());
-		//file_put_contents($this->getDataFolder() . $npc->getNameTag() . ".dat", $npc->getSaveNBT());
-	}
-
-	public function onDisable(): void {
-		foreach ($this->getServer()->getWorldManager()->getWorlds() as $level) {
-			foreach ($level->getEntities() as $entity) {
-				if ($entity instanceof TradeNPC) {
-					file_put_contents($this->getDataFolder() . $entity->getNameTag() . ".dat", $entity->getSaveNBT());
-				}
-			}
-		}
 	}
 }
