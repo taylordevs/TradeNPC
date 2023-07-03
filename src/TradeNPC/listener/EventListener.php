@@ -30,9 +30,12 @@ class EventListener implements Listener
 
     public function __construct(
         protected Main $plugin
-    ) {}
+    )
+    {
+    }
 
-    public function onChat(PlayerChatEvent $event): void {
+    public function onChat(PlayerChatEvent $event): void
+    {
         $player = $event->getPlayer();
         $chat = $event->getMessage();
         $plugin = $this->plugin;
@@ -67,6 +70,7 @@ class EventListener implements Listener
             $event->cancel();
         }
     }
+
     public function handleDataPacket(DataPacketReceiveEvent $event): void
     {
         $plugin = $this->plugin;
@@ -123,7 +127,8 @@ class EventListener implements Listener
         }
     }
 
-    public function onQuit(PlayerQuitEvent $event) {
+    public function onQuit(PlayerQuitEvent $event)
+    {
         $player = $event->getPlayer();
         if (isset($this->deviceOSData[strtolower($player->getName())]))
             unset($this->deviceOSData[strtolower($player->getName())]);

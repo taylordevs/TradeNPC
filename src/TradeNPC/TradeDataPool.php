@@ -6,13 +6,14 @@ namespace TradeNPC;
 
 use TradeNPC\entity\TradeNPC;
 
-class TradeDataPool {
+class TradeDataPool
+{
 
-	/** @var TradeNPC[] */
-	public static $interactNPCData = [];
+    /** @var TradeNPC[] */
+    public static $interactNPCData = [];
 
-	/** @var int[] */
-	public static $windowIdData = [];
+    /** @var int[] */
+    public static $windowIdData = [];
 
-	public static $editNPCData = [];
+    public static $editNPCData = [];
 }
