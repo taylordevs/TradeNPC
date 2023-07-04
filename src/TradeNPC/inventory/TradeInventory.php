@@ -82,4 +82,8 @@ class TradeInventory extends SimpleInventory implements BlockInventory
     {
         return $this->npc->getPosition();
     }
+
+    public function getNPC(): ?TradeNPC {
+        return $this->npc;
+    }
 }

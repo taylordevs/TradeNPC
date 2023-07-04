@@ -27,6 +27,7 @@ use pocketmine\network\mcpe\protocol\types\inventory\stackrequest\ItemStackReque
 use pocketmine\network\mcpe\protocol\types\inventory\stackrequest\PlaceStackRequestAction;
 use pocketmine\network\mcpe\protocol\types\inventory\UseItemOnEntityTransactionData;
 use TradeNPC\entity\TradeNPC;
+use TradeNPC\inventory\TradeInventory;
 use TradeNPC\Main;
 use TradeNPC\TradeDataPool;
 
@@ -80,42 +81,19 @@ class EventListener implements Listener
     {
         $player = $event->getOrigin()->getPlayer();
         $packet = $event->getPacket();
-        $getWindowsAndSlot = function (int $containerInterfaceId, int $slotId) use ($player): ?array {
-            $inventoryManager = $player->getNetworkSession()->getInvManager();
-            [$windowId, $slotId] = ItemStackContainerIdTranslator::translate($containerInterfaceId, $inventoryManager->getCurrentWindowId(), $slotId);
-            $windowsAndSlot = $inventoryManager->locateWindowAndSlot($windowId, $slotId);
-            if ($windowId === null) {
-                return null;
-            }
-            [$inventory, $slot] = $windowsAndSlot;
-            if($inventory !== null and !$inventory->slotExists($slot)) {
-                return null;
-            }
-            return [$inventory, $slot];
-        };
         if ($packet instanceof ItemStackRequestPacket) {
             $requests = $packet->getRequests();
             foreach ($requests as $request) {
                 $actions = $request->getActions();
                 foreach ($actions as $action) {
                     if ($action instanceof PlaceStackRequestAction) {
-                        $source = $action->getSource();
-                        $destination = $action->getDestination();
-                        $SourceContainerID = $source->getContainerId();
-                        $DestinationContainerID = $destination->getContainerId();
-                        $SourceSlotID = $source->getSlotId();
-                        $DestinationSlotID = $destination->getSlotId();
-                        $sourceWindowsAndSlot = $getWindowsAndSlot($SourceContainerID, $SourceSlotID);
-                        $destinationWindowsAndSlot = $getWindowsAndSlot($DestinationContainerID, $DestinationSlotID);
-                        [$sourceInventory, $sourceSlot] = $sourceWindowsAndSlot;
-                        [$destinationInventory, $destinationSlot] = $destinationWindowsAndSlot;
-                        if ($sourceInventory === null or $destinationInventory === null) {
-                            return;
+                        $currentWindow = $player->getCurrentWindow();
+                        if ($currentWindow instanceof TradeInventory) {
+                            $holder = $currentWindow->getNPC();
+                            if ($holder instanceof TradeNPC) {
+                                $shop = $holder->getShopCompoundTag()->getListTag("Recipes");
+                            }
                         }
-                        $sourceItem = $sourceInventory->getItem($sourceSlot);
-                        $destinationItem = $destinationInventory->getItem($destinationSlot);
-                        var_dump($sourceItem);
-                        var_dump($destinationItem);
                     }
                 }
             }
