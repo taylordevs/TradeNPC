@@ -10,9 +10,11 @@ use pocketmine\inventory\SimpleInventory;
 use pocketmine\nbt\tag\CompoundTag;
 use pocketmine\nbt\TreeRoot;
 use pocketmine\network\mcpe\protocol\types\CacheableNbt;
+use pocketmine\network\mcpe\protocol\types\inventory\ContainerUIIds;
 use pocketmine\network\mcpe\protocol\types\inventory\WindowTypes;
 use pocketmine\network\mcpe\protocol\UpdateTradePacket;
 use pocketmine\player\Player;
+use pocketmine\utils\ObjectSet;
 use pocketmine\world\Position;
 use TradeNPC\entity\TradeNPC;
 use TradeNPC\TradeDataPool;
@@ -39,7 +41,7 @@ class TradeInventory extends SimpleInventory implements BlockInventory
 
         $pk = new UpdateTradePacket();
         $pk->displayName = $this->npc->getNameTag();
-        $pk->windowId = $id = $who->getId();
+        $pk->windowId = $id = $who->getNetworkSession()->getInvManager()->getCurrentWindowId();
         $pk->isV2Trading = true;
         $pk->tradeTier = 3;
         $pk->playerActorUniqueId = $id;

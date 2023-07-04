@@ -51,6 +51,30 @@ class Main extends PluginBase implements Listener
 
     public $turn = false;
 
+    protected function onEnable(): void
+    {
+        if (!InvMenuHandler::isRegistered()) {
+            InvMenuHandler::register($this);
+        }
+        EntityFactory::getInstance()->register(TradeNPC::class, function (World $world, CompoundTag $nbt): TradeNPC {
+            return new TradeNPC(EntityDataHelper::parseLocation($nbt, $world), Human::parseSkinNBT($nbt), $nbt);
+        }, ['TradeNPC', 'Trade']);
+        $this->getServer()->getPluginManager()->registerEvents(new EventListener($this), $this);
+        SimplePacketHandler::createInterceptor($this)
+            ->interceptIncoming(static function (ContainerClosePacket $packet, NetworkSession $networkSession): bool {
+                $player = $networkSession->getPlayer();
+                if (isset(TradeDataPool::$windowIdData[$player->getName()])) {
+                    $pk = ContainerClosePacket::create(
+                        windowId: 255,
+                        server: false
+                    );
+                    $networkSession->sendDataPacket($pk);
+                }
+                return true;
+            });
+        $this->menu = InvMenu::create(InvMenu::TYPE_CHEST);
+    }
+
     public function getEntityName(string $chat)
     {
         foreach ($this->getServer()->getWorldManager()->getWorlds() as $level) {
@@ -193,52 +217,8 @@ class Main extends PluginBase implements Listener
         }
     }
 
-    public function setCWindow(TradeInventory $inventory, $player): bool
-    {
-        if ($inventory === $this->currentWindow) {
-            return true;
-        }
-        $ev = new InventoryOpenEvent($inventory, $player);
-        $ev->call();
-        if ($ev->isCancelled()) {
-            return false;
-        }
-        $player->removeCurrentWindow();
-
-        if ($player->getNetworkSession()->getInvManager() === null) {
-            throw new InvalidArgumentException("Player cannot open inventories in this state");
-        }
-        $inventory->onOpen($player);
-        $this->currentWindow = $inventory;
-        return true;
-    }
-
     protected function onLoad(): void
     {
         self::setInstance($this);
-    }
-
-    protected function onEnable(): void
-    {
-        if (!InvMenuHandler::isRegistered()) {
-            InvMenuHandler::register($this);
-        }
-        EntityFactory::getInstance()->register(TradeNPC::class, function (World $world, CompoundTag $nbt): TradeNPC {
-            return new TradeNPC(EntityDataHelper::parseLocation($nbt, $world), Human::parseSkinNBT($nbt), $nbt);
-        }, ['TradeNPC', 'Trade']);
-        $this->getServer()->getPluginManager()->registerEvents(new EventListener($this), $this);
-        SimplePacketHandler::createInterceptor($this)
-            ->interceptIncoming(static function (ContainerClosePacket $packet, NetworkSession $networkSession): bool {
-                $player = $networkSession->getPlayer();
-                if (isset(TradeDataPool::$windowIdData[$player->getName()])) {
-                    $pk = ContainerClosePacket::create(
-                        windowId: 255,
-                        server: false
-                    );
-                    $networkSession->sendDataPacket($pk);
-                }
-                return true;
-            });
-        $this->menu = InvMenu::create(InvMenu::TYPE_CHEST);
     }
 }

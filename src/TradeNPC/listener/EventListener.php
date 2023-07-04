@@ -10,15 +10,22 @@ use pocketmine\event\player\PlayerQuitEvent;
 use pocketmine\event\server\DataPacketReceiveEvent;
 use pocketmine\item\Item;
 use pocketmine\nbt\tag\CompoundTag;
+use pocketmine\network\mcpe\handler\ItemStackContainerIdTranslator;
+use pocketmine\network\mcpe\handler\ItemStackRequestExecutor;
+use pocketmine\network\mcpe\InventoryManager;
 use pocketmine\network\mcpe\JwtUtils;
 use pocketmine\network\mcpe\protocol\ActorEventPacket;
 use pocketmine\network\mcpe\protocol\InventoryTransactionPacket;
+use pocketmine\network\mcpe\protocol\ItemStackRequestPacket;
+use pocketmine\network\mcpe\protocol\ItemStackResponsePacket;
 use pocketmine\network\mcpe\protocol\LoginPacket;
+use pocketmine\network\mcpe\protocol\PlayerAuthInputPacket;
 use pocketmine\network\mcpe\protocol\types\ActorEvent;
 use pocketmine\network\mcpe\protocol\types\inventory\NetworkInventoryAction;
 use pocketmine\network\mcpe\protocol\types\inventory\NormalTransactionData;
+use pocketmine\network\mcpe\protocol\types\inventory\stackrequest\ItemStackRequest;
+use pocketmine\network\mcpe\protocol\types\inventory\stackrequest\PlaceStackRequestAction;
 use pocketmine\network\mcpe\protocol\types\inventory\UseItemOnEntityTransactionData;
-use pocketmine\player\Player;
 use TradeNPC\entity\TradeNPC;
 use TradeNPC\Main;
 use TradeNPC\TradeDataPool;
@@ -30,9 +37,7 @@ class EventListener implements Listener
 
     public function __construct(
         protected Main $plugin
-    )
-    {
-    }
+    ){}
 
     public function onChat(PlayerChatEvent $event): void
     {
@@ -73,11 +78,47 @@ class EventListener implements Listener
 
     public function handleDataPacket(DataPacketReceiveEvent $event): void
     {
-        $plugin = $this->plugin;
         $player = $event->getOrigin()->getPlayer();
         $packet = $event->getPacket();
-        if ($player instanceof Player and isset(TradeDataPool::$windowIdData[$player->getName()])) {
-            var_dump(TradeDataPool::$windowIdData[$player->getName()]);
+        $getWindowsAndSlot = function (int $containerInterfaceId, int $slotId) use ($player): ?array {
+            $inventoryManager = $player->getNetworkSession()->getInvManager();
+            [$windowId, $slotId] = ItemStackContainerIdTranslator::translate($containerInterfaceId, $inventoryManager->getCurrentWindowId(), $slotId);
+            $windowsAndSlot = $inventoryManager->locateWindowAndSlot($windowId, $slotId);
+            if ($windowId === null) {
+                return null;
+            }
+            [$inventory, $slot] = $windowsAndSlot;
+            if($inventory !== null and !$inventory->slotExists($slot)) {
+                return null;
+            }
+            return [$inventory, $slot];
+        };
+        if ($packet instanceof ItemStackRequestPacket) {
+            $requests = $packet->getRequests();
+            foreach ($requests as $request) {
+                $actions = $request->getActions();
+                foreach ($actions as $action) {
+                    if ($action instanceof PlaceStackRequestAction) {
+                        $source = $action->getSource();
+                        $destination = $action->getDestination();
+                        $SourceContainerID = $source->getContainerId();
+                        $DestinationContainerID = $destination->getContainerId();
+                        $SourceSlotID = $source->getSlotId();
+                        $DestinationSlotID = $destination->getSlotId();
+                        $sourceWindowsAndSlot = $getWindowsAndSlot($SourceContainerID, $SourceSlotID);
+                        $destinationWindowsAndSlot = $getWindowsAndSlot($DestinationContainerID, $DestinationSlotID);
+                        [$sourceInventory, $sourceSlot] = $sourceWindowsAndSlot;
+                        [$destinationInventory, $destinationSlot] = $destinationWindowsAndSlot;
+                        if ($sourceInventory === null or $destinationInventory === null) {
+                            return;
+                        }
+                        $sourceItem = $sourceInventory->getItem($sourceSlot);
+                        $destinationItem = $destinationInventory->getItem($destinationSlot);
+                        var_dump($sourceItem);
+                        var_dump($destinationItem);
+                    }
+                }
+            }
         }
         if ($packet instanceof ActorEventPacket) {
             if ($packet->eventId === ActorEvent::COMPLETE_TRADE) {
@@ -116,7 +157,7 @@ class EventListener implements Listener
             } elseif ($packet->trData instanceof UseItemOnEntityTransactionData) {
                 $entity = $player->getWorld()->getEntity($packet->trData->getActorRuntimeId());
                 if ($entity instanceof TradeNPC) {
-                    $plugin->setCWindow($entity->getTradeInventory(), $player);
+                    $player->setCurrentWindow($entity->getTradeInventory());
                 }
             }
         }
